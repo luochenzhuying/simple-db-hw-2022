@@ -7,7 +7,9 @@ import simpledb.common.Debug;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -76,7 +78,7 @@ public class HeapPage implements Page {
      */
     private int getNumTuples() {
         // TODO: some code goes here
-        return 0;
+        return (BufferPool.getPageSize() * 8 ) / (td.getSize() * 8 + 1);
 
     }
 
@@ -88,7 +90,7 @@ public class HeapPage implements Page {
     private int getHeaderSize() {
 
         // TODO: some code goes here
-        return 0;
+        return (int) Math.ceil((double) numSlots / 8);
 
     }
 
@@ -122,7 +124,7 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
         // TODO: some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return pid;
     }
 
     /**
@@ -294,7 +296,13 @@ public class HeapPage implements Page {
      */
     public int getNumUnusedSlots() {
         // TODO: some code goes here
-        return 0;
+        int count = 0;
+        for (int i = 0; i < numSlots; i++) {
+            if (!isSlotUsed(i)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
@@ -302,7 +310,11 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // TODO: some code goes here
-        return false;
+        //calculate the index of the slot in the header
+        int headerIndex = i / 8;
+        // calculate the bit position of the slot in the header
+        int bitPosition = i % 8;
+        return ((header[headerIndex] >> bitPosition) & 1) == 1;
     }
 
     /**
@@ -319,7 +331,14 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // TODO: some code goes here
-        return null;
+        List<Tuple> list = new ArrayList<>();
+        // if the tuple is not null, add it to the list
+        for (int i = 0; i < numSlots; i++) {
+            if (isSlotUsed(i)) {
+                list.add(tuples[i]);
+            }
+        }
+        return list.iterator();
     }
 
 }

@@ -1,6 +1,8 @@
 package simpledb.storage;
 
 import java.io.Serializable;
+import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 
@@ -10,6 +12,10 @@ import java.util.Iterator;
  * with the data for each field.
  */
 public class Tuple implements Serializable {
+
+    TupleDesc td;
+    RecordId rid;
+    AbstractList<Field> fields;
 
     private static final long serialVersionUID = 1L;
 
@@ -21,6 +27,8 @@ public class Tuple implements Serializable {
      */
     public Tuple(TupleDesc td) {
         // TODO: some code goes here
+        this.td = td;
+        this.fields = new ArrayList<>(td.numFields());
     }
 
     /**
@@ -28,16 +36,16 @@ public class Tuple implements Serializable {
      */
     public TupleDesc getTupleDesc() {
         // TODO: some code goes here
-        return null;
+        return this.td;
     }
 
     /**
      * @return The RecordId representing the location of this tuple on disk. May
-     *         be null.
+     * be null.
      */
     public RecordId getRecordId() {
         // TODO: some code goes here
-        return null;
+        return rid;
     }
 
     /**
@@ -47,6 +55,7 @@ public class Tuple implements Serializable {
      */
     public void setRecordId(RecordId rid) {
         // TODO: some code goes here
+        this.rid = rid;
     }
 
     /**
@@ -57,6 +66,11 @@ public class Tuple implements Serializable {
      */
     public void setField(int i, Field f) {
         // TODO: some code goes here
+        if(i >= 0 && i < fields.size()){
+            fields.set(i,f);
+        } else if (i == fields.size()) {
+            fields.add(f);
+        }
     }
 
     /**
@@ -65,6 +79,9 @@ public class Tuple implements Serializable {
      */
     public Field getField(int i) {
         // TODO: some code goes here
+        if(i >= 0 && i < fields.size()){
+            return fields.get(i);
+        }
         return null;
     }
 
@@ -78,7 +95,11 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // TODO: some code goes here
-        throw new UnsupportedOperationException("Implement this");
+        StringBuilder sb = new StringBuilder();
+        for (Field field : fields) {
+            sb.append(field.toString()).append("\t");
+        }
+        return sb.toString();
     }
 
     /**
@@ -86,7 +107,7 @@ public class Tuple implements Serializable {
      */
     public Iterator<Field> fields() {
         // TODO: some code goes here
-        return null;
+        return fields.iterator();
     }
 
     /**
@@ -94,5 +115,6 @@ public class Tuple implements Serializable {
      */
     public void resetTupleDesc(TupleDesc td) {
         // TODO: some code goes here
+        this.td = td;
     }
 }
