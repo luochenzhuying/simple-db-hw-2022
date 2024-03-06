@@ -39,7 +39,8 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private final int numPages;
-    private final Map<PageId, Page> bufferPool = new ConcurrentHashMap<>();
+
+    private LRUCache lruCache;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -49,6 +50,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // TODO: some code goes here
         this.numPages = numPages;
+        lruCache = new LRUCache(numPages);
     }
 
     public static int getPageSize() {
@@ -83,12 +85,12 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         // TODO: some code goes here
-        if (!bufferPool.containsKey(pid)) {
+        if (lruCache.get(pid) == null) {
             DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page = dbFile.readPage(pid);
-            bufferPool.put(pid, page);
+            lruCache.put(pid, page);
         }
-        return bufferPool.get(pid);
+        return lruCache.get(pid);
     }
 
     /**
@@ -155,6 +157,8 @@ public class BufferPool {
             throws DbException, IOException, TransactionAbortedException {
         // TODO: some code goes here
         // not necessary for lab1
+        DbFile f = Database.getCatalog().getDatabaseFile(tableId);
+        updateBufferPool(f.insertTuple(tid,t), tid);
     }
 
     /**
@@ -174,6 +178,16 @@ public class BufferPool {
             throws DbException, IOException, TransactionAbortedException {
         // TODO: some code goes here
         // not necessary for lab1
+        DbFile f = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        List<Page> updatePages = f.deleteTuple(tid, t);
+        updateBufferPool(updatePages,tid);
+    }
+
+    private void updateBufferPool(List<Page> updatePages,TransactionId tid) {
+        for (Page page : updatePages) {
+           page.markDirty(true, tid);
+           lruCache.put(page.getId(), page);
+        }
     }
 
     /**
@@ -184,7 +198,12 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // TODO: some code goes here
         // not necessary for lab1
-
+        for(Map.Entry<PageId,LRUCache.Node> group : lruCache.getEntrySet()) {
+            Page page = group.getValue().value;
+            if (page.isDirty() != null) {
+                flushPage(group.getKey());
+            }
+        }
     }
 
     /**
@@ -199,6 +218,7 @@ public class BufferPool {
     public synchronized void removePage(PageId pid) {
         // TODO: some code goes here
         // not necessary for lab1
+        lruCache.removeByKey(pid);
     }
 
     /**
@@ -209,6 +229,16 @@ public class BufferPool {
     private synchronized void flushPage(PageId pid) throws IOException {
         // TODO: some code goes here
         // not necessary for lab1
+        Page page = lruCache.get(pid);
+        if (page == null) {
+            return;
+        }
+        TransactionId tid = page.isDirty();
+        if (tid != null) {
+            Page beforeImage = page.getBeforeImage();
+            Database.getLogFile().logWrite(tid, beforeImage, page);
+            Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
+        }
     }
 
     /**
@@ -228,4 +258,94 @@ public class BufferPool {
         // not necessary for lab1
     }
 
+    private static class LRUCache {
+        int capacity;
+        int size;
+        ConcurrentHashMap<PageId, Node> map;
+        Node head = new Node(null, null);
+        Node tail = new Node(null, null);
+
+        public LRUCache(int capacity) {
+            this.capacity = capacity;
+            this.size = 0;
+            this.map = new ConcurrentHashMap<>();
+            head.next = tail;
+            tail.prev = head;
+        }
+
+        public synchronized Page get(PageId key) {
+            if (map.containsKey(key)) {
+                remove(map.get(key));
+                moveToHead(map.get(key));
+                return map.get(key).value;
+            } else {
+                return null;
+            }
+        }
+
+        public synchronized void put(PageId key, Page value){
+            Node newNode = new Node(key, value);
+            if (map.containsKey(key)) {
+                 remove(map.get(key));
+            }else {
+                size++;
+                if (size > capacity) {
+                    Node removeNode = tail.prev;
+                    //discard not dirty page
+                    while (removeNode.value.isDirty() != null && removeNode != head) {
+                        removeNode = removeNode.prev;
+                    }
+                    if(removeNode != head && removeNode != tail){
+                        map.remove(removeNode.key);
+                        remove(removeNode);
+                        size--;
+                    }
+                }
+            }
+            moveToHead(newNode);
+            map.put(key, newNode);
+        }
+
+        public synchronized void remove(Node node) {
+            Node prev = node.prev;
+            Node next = node.next;
+            prev.next = next;
+            next.prev = prev;
+        }
+
+        public synchronized void moveToHead(Node node) {
+            Node next = head.next;
+            head.next = node;
+            node.prev = head;
+            node.next = next;
+            next.prev = node;
+        }
+
+        public synchronized int getSize() {
+            return size;
+        }
+
+        public synchronized void removeByKey(PageId key) {
+            Node node = map.get(key);
+            remove(node);
+        }
+
+
+    private static class Node {
+        PageId key;
+        Page value;
+        Node prev;
+        Node next;
+
+        public Node(PageId key, Page value) {
+            this.key = key;
+            this.value = value;
+        }
+    }
+
+    public Set<Map.Entry<PageId,Node>> getEntrySet() {
+        return map.entrySet();
+    }
 }
+}
+

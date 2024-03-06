@@ -36,7 +36,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Before public void createTupleLists() {
     this.scan1 = TestUtil.createTupleList(width1,
-        new int[] { 1, 2,
+            new int[] { 1, 2,
                     1, 4,
                     1, 6,
                     3, 2,
@@ -44,7 +44,7 @@ public class AggregateTest extends SimpleDbTestBase {
                     3, 6,
                     5, 7 });
     this.scan2 = TestUtil.createTupleList(width1,
-        new Object[] { 1, "a",
+            new Object[] { 1, "a",
                     1, "a",
                     1, "a",
                     3, "a",
@@ -52,7 +52,7 @@ public class AggregateTest extends SimpleDbTestBase {
                     3, "a",
                     5, "a" });
     this.scan3 = TestUtil.createTupleList(width1,
-        new Object[] { "a", 2,
+            new Object[] { "a", 2,
                     "a", 4,
                     "a", 6,
                     "b", 2,
@@ -61,28 +61,28 @@ public class AggregateTest extends SimpleDbTestBase {
                     "c", 7 });
 
     this.sum = TestUtil.createTupleList(width1,
-        new int[] { 1, 12,
+            new int[] { 1, 12,
                     3, 12,
                     5, 7 });
     this.sumstring = TestUtil.createTupleList(width1,
-        new Object[] { "a", 12,
+            new Object[] { "a", 12,
                     "b", 12,
                     "c", 7 });
 
     this.avg = TestUtil.createTupleList(width1,
-        new int[] { 1, 4,
+            new int[] { 1, 4,
                     3, 4,
                     5, 7 });
     this.min = TestUtil.createTupleList(width1,
-        new int[] { 1, 2,
+            new int[] { 1, 2,
                     3, 2,
                     5, 7 });
     this.max = TestUtil.createTupleList(width1,
-        new int[] { 1, 6,
+            new int[] { 1, 6,
                     3, 6,
                     5, 7 });
     this.count = TestUtil.createTupleList(width1,
-        new int[] { 1, 3,
+            new int[] { 1, 3,
                     3, 3,
                     5, 1 });
 
@@ -113,7 +113,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void rewind() throws Exception {
     Aggregate op = new Aggregate(scan1, 1, 0,
-        Aggregator.Op.MIN);
+            Aggregator.Op.MIN);
     op.open();
     while (op.hasNext()) {
       assertNotNull(op.next());
@@ -130,7 +130,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void countStringAggregate() throws Exception {
     Aggregate op = new Aggregate(scan2, 1, 0,
-        Aggregator.Op.COUNT);
+            Aggregator.Op.COUNT);
     op.open();
     count.open();
     TestUtil.matchAllTuples(count, op);
@@ -141,7 +141,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void sumStringGroupBy() throws Exception {
     Aggregate op = new Aggregate(scan3, 1, 0,
-        Aggregator.Op.SUM);
+            Aggregator.Op.SUM);
     op.open();
     sumstring.open();
     TestUtil.matchAllTuples(sumstring, op);
@@ -152,7 +152,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void sumAggregate() throws Exception {
     Aggregate op = new Aggregate(scan1, 1, 0,
-        Aggregator.Op.SUM);
+            Aggregator.Op.SUM);
     op.open();
     sum.open();
     TestUtil.matchAllTuples(sum, op);
@@ -163,7 +163,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void avgAggregate() throws Exception {
     Aggregate op = new Aggregate(scan1, 1, 0,
-       Aggregator.Op.AVG);
+            Aggregator.Op.AVG);
     op.open();
     avg.open();
     TestUtil.matchAllTuples(avg, op);
@@ -174,7 +174,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void maxAggregate() throws Exception {
     Aggregate op = new Aggregate(scan1, 1, 0,
-        Aggregator.Op.MAX);
+            Aggregator.Op.MAX);
     op.open();
     max.open();
     TestUtil.matchAllTuples(max, op);
@@ -185,7 +185,7 @@ public class AggregateTest extends SimpleDbTestBase {
    */
   @Test public void minAggregate() throws Exception {
     Aggregate op = new Aggregate(scan1, 1, 0,
-       Aggregator.Op.MIN);
+            Aggregator.Op.MIN);
     op.open();
     min.open();
     TestUtil.matchAllTuples(min, op);
