@@ -9,6 +9,7 @@ import simpledb.storage.*;
 import simpledb.transaction.TransactionId;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -503,7 +504,7 @@ public class LogicalPlan {
         return new Project(outFields, outTypes, node);
     }
 
-    public static void main(String[] argv) {
+    public static void main(String[] argv) throws IOException {
         // construct a 3-column table schema
         Type[] types = new Type[]{Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE};
         String[] names = new String[]{"field0", "field1", "field2"};

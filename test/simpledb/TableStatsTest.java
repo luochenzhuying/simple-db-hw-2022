@@ -98,7 +98,7 @@ public class TableStatsTest extends SimpleDbTestBase {
 	/**
 	 * Verify the table-cardinality estimates based on a selectivity estimate
 	 */
-	@Test public void estimateTableCardinalityTest() {
+	@Test public void estimateTableCardinalityTest() throws IOException {
 		TableStats s = new TableStats(this.tableId, IO_COST);
 		
 		// Try a random selectivity
@@ -115,7 +115,7 @@ public class TableStatsTest extends SimpleDbTestBase {
 	 * each possible Op because we will probably catch any bugs here in
 	 * IntHistogramTest, so we hopefully don't need all the JUnit checkboxes.
 	 */
-	@Test public void estimateSelectivityTest() {
+	@Test public void estimateSelectivityTest() throws IOException {
 		final int maxCellVal = 32;	// Tuple values are randomized between 0 and this number
 		
 		final Field aboveMax = new IntField(maxCellVal + 10);

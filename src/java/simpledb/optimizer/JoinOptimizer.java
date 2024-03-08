@@ -99,13 +99,13 @@ public class JoinOptimizer {
         if (j instanceof LogicalSubplanJoinNode) {
             // A LogicalSubplanJoinNode represents a subquery.
             // You do not need to implement proper support for these for Lab 3.
-            return card1 + cost1 + cost2;
+            return card1;
         } else {
             // Insert your code here.
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            return cost1 + card1 * cost2 + card1 * card2;
         }
     }
 
@@ -145,6 +145,19 @@ public class JoinOptimizer {
                                                    Map<String, Integer> tableAliasToId) {
         int card = 1;
         // TODO: some code goes here
+        if(joinOp.equals(Predicate.Op.EQUALS)){
+            if(t1pkey && !t2pkey){
+                card = card2;
+            }else if(!t1pkey && t2pkey){
+                card = card1;
+            }else if(t1pkey && t2pkey){
+                card = Math.min(card1, card2);
+            } else {
+              card = Math.max(card1, card2);
+            }
+        } else {
+            card = (int)(card1 * card2 * 0.3);
+        }
         return card <= 0 ? 1 : card;
     }
 
@@ -158,24 +171,22 @@ public class JoinOptimizer {
      */
     public <T> Set<Set<T>> enumerateSubsets(List<T> v, int size) {
         Set<Set<T>> els = new HashSet<>();
-        els.add(new HashSet<>());
-        // Iterator<Set> it;
-        // long start = System.currentTimeMillis();
-
-        for (int i = 0; i < size; i++) {
-            Set<Set<T>> newels = new HashSet<>();
-            for (Set<T> s : els) {
-                for (T t : v) {
-                    Set<T> news = new HashSet<>(s);
-                    if (news.add(t))
-                        newels.add(news);
-                }
-            }
-            els = newels;
-        }
-
+        dfs(els, new HashSet<>(), v, size, 0);
         return els;
+    }
 
+    private <T> void dfs(Set<Set<T>> els, Set<T> el, List<T> v, int size, int index) {
+        if (el.size() == size) {
+            els.add(new HashSet<>(el));
+            return;
+        }
+        if (index == v.size()) {
+            return;
+        }
+        el.add(v.get(index));
+        dfs(els, el, v, size, index + 1);
+        el.remove(v.get(index));
+        dfs(els, el, v, size, index + 1);
     }
 
     /**
@@ -201,6 +212,34 @@ public class JoinOptimizer {
         // Not necessary for labs 1 and 2.
 
         // TODO: some code goes here
+        CostCard bestCostCard = new CostCard();
+        PlanCache pc = new PlanCache();
+        //use help function to get all optimal join order in every size and store them in PlanCache
+        for (int i = 1; i <= joins.size(); i++) {
+            Set<Set<LogicalJoinNode>> subsets = enumerateSubsets(joins, i);
+            for (Set<LogicalJoinNode> subset : subsets) {
+                double bestCostSoFar = Double.MAX_VALUE;
+                bestCostCard = new CostCard();
+                for (LogicalJoinNode j : subset) {
+                    //find the optimal join order in subset
+                    CostCard costCard = computeCostAndCardOfSubplan(stats, filterSelectivities, j, subset, bestCostSoFar, pc);
+                    if (costCard == null) {
+                        continue;
+                        }
+                    bestCostSoFar = costCard.cost;
+                    bestCostCard = costCard;
+                    }
+                if (bestCostSoFar != Double.MAX_VALUE) {
+                    pc.addPlan(subset, bestCostCard.cost, bestCostCard.card, bestCostCard.plan);
+                 }
+                }
+            }
+        if (explain) {
+            printJoins(bestCostCard.plan, pc, stats, filterSelectivities);
+        }
+        if(bestCostCard.plan != null){
+            return bestCostCard.plan;
+        }
         return joins;
     }
 
