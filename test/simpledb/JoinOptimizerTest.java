@@ -279,7 +279,7 @@ public class JoinOptimizerTest extends SimpleDbTestBase {
      * of ordering joins, and not taking an unreasonable amount of time to do so
      */
     @Test
-    public void orderJoinsTest() throws ParsingException, IOException {
+    public void orderJoinsTest() throws ParsingException, IOException, DbException {
         // This test is intended to approximate the join described in the
         // "Query Planning" section of 2009 Quiz 1,
         // though with some minor variation due to limitations in simpledb
@@ -390,7 +390,7 @@ public class JoinOptimizerTest extends SimpleDbTestBase {
      */
     @Test(timeout = 60000)
     public void bigOrderJoinsTest() throws IOException,
-            ParsingException {
+            ParsingException, DbException {
         final int IO_COST = 103;
 
         JoinOptimizer j;
@@ -534,7 +534,7 @@ public class JoinOptimizerTest extends SimpleDbTestBase {
      */
     @Test
     public void nonequalityOrderJoinsTest() throws IOException,
-            ParsingException {
+            ParsingException, DbException {
         final int IO_COST = 103;
 
         JoinOptimizer j;

@@ -63,7 +63,7 @@ public class TableStats {
         return statsMap;
     }
 
-    public static void computeStatistics() throws IOException {
+    public static void computeStatistics() throws IOException, DbException {
         Iterator<Integer> tableIt = Database.getCatalog().tableIdIterator();
 
         System.out.println("Computing table stats.");
@@ -90,7 +90,7 @@ public class TableStats {
      * @param ioCostPerPage The cost per page of IO. This doesn't differentiate between
      *                      sequential-scan IO and disk seeks.
      */
-    public TableStats(int tableid, int ioCostPerPage) throws IOException {
+    public TableStats(int tableid, int ioCostPerPage) throws IOException, DbException {
         // For this function, you'll have to get the
         // DbFile for the table in question,
         // then scan through its tuples and calculate

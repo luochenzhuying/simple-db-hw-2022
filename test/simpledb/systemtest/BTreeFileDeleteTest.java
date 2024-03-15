@@ -1,6 +1,7 @@
 package simpledb.systemtest;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Permissions;
 import simpledb.index.*;
 import simpledb.storage.BufferPool;
@@ -30,7 +31,7 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 	}
 
 	@After
-	public void tearDown() {
+	public void tearDown() throws DbException {
 		Database.getBufferPool().transactionComplete(tid);
 
 		// set the page size back to the default

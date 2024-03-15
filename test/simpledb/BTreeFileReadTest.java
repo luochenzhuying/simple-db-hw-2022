@@ -1,6 +1,7 @@
 package simpledb;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Utility;
 import simpledb.execution.IndexPredicate;
 import simpledb.index.*;
@@ -34,7 +35,7 @@ public class BTreeFileReadTest extends SimpleDbTestBase {
 	}
 
 	@After
-	public void tearDown() {
+	public void tearDown() throws DbException {
 		Database.getBufferPool().transactionComplete(tid);
 	}
 

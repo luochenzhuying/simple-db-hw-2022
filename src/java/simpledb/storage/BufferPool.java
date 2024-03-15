@@ -1,8 +1,11 @@
 package simpledb.storage;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.Getter;
+import lombok.SneakyThrows;
 import simpledb.common.Database;
 import simpledb.common.DbException;
-import simpledb.common.DeadlockException;
 import simpledb.common.Permissions;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
@@ -10,7 +13,6 @@ import simpledb.transaction.TransactionId;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -42,6 +44,12 @@ public class BufferPool {
 
     private LRUCache lruCache;
 
+    private LockManager lockManager;
+
+    public enum LockType {
+        SHARE_LOCK, EXCLUSIVE_LOCK
+    }
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -51,6 +59,7 @@ public class BufferPool {
         // TODO: some code goes here
         this.numPages = numPages;
         lruCache = new LRUCache(numPages);
+        lockManager = new LockManager();
     }
 
     public static int getPageSize() {
@@ -85,6 +94,20 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         // TODO: some code goes here
+        LockType lockType;
+        if (perm == Permissions.READ_ONLY) {
+            lockType = LockType.SHARE_LOCK;
+        } else {
+            lockType = LockType.EXCLUSIVE_LOCK;
+        }
+        try {
+            // if fail to acquire lock, abort the transaction
+            if (!lockManager.acquireLock(pid, tid, lockType, 0)) {
+                throw new TransactionAbortedException();
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         if (lruCache.get(pid) == null) {
             DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page = dbFile.readPage(pid);
@@ -105,6 +128,7 @@ public class BufferPool {
     public void unsafeReleasePage(TransactionId tid, PageId pid) {
         // TODO: some code goes here
         // not necessary for lab1|lab2
+        lockManager.releasePage(tid, pid);
     }
 
     /**
@@ -115,16 +139,9 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) {
         // TODO: some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
-    /**
-     * Return true if the specified transaction has a lock on the specified page
-     */
-    public boolean holdsLock(TransactionId tid, PageId p) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
-        return false;
-    }
 
     /**
      * Commit or abort a given transaction; release all locks associated to
@@ -136,6 +153,31 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit) {
         // TODO: some code goes here
         // not necessary for lab1|lab2
+        if (commit) {
+            try {
+                flushPages(tid);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            rollBack(tid);
+        }
+        lockManager.releasePagesByTid(tid);
+    }
+
+    @SneakyThrows
+    private synchronized void rollBack(TransactionId tid) {
+        for (Map.Entry<PageId, LRUCache.Node> group : lruCache.getEntrySet()) {
+            PageId pageId = group.getKey();
+            Page page = group.getValue().value;
+            if (tid.equals(page.isDirty())) {
+                int tableId = pageId.getTableId();
+                DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
+                Page readPage = dbFile.readPage(pageId);
+                lruCache.removeByKey(group.getKey());
+                lruCache.put(pageId, readPage);
+            }
+        }
     }
 
     /**
@@ -158,7 +200,7 @@ public class BufferPool {
         // TODO: some code goes here
         // not necessary for lab1
         DbFile f = Database.getCatalog().getDatabaseFile(tableId);
-        updateBufferPool(f.insertTuple(tid,t), tid);
+        updateBufferPool(f.insertTuple(tid, t), tid);
     }
 
     /**
@@ -180,13 +222,13 @@ public class BufferPool {
         // not necessary for lab1
         DbFile f = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
         List<Page> updatePages = f.deleteTuple(tid, t);
-        updateBufferPool(updatePages,tid);
+        updateBufferPool(updatePages, tid);
     }
 
-    private void updateBufferPool(List<Page> updatePages,TransactionId tid) {
+    private void updateBufferPool(List<Page> updatePages, TransactionId tid) throws DbException {
         for (Page page : updatePages) {
-           page.markDirty(true, tid);
-           lruCache.put(page.getId(), page);
+            page.markDirty(true, tid);
+            lruCache.put(page.getId(), page);
         }
     }
 
@@ -198,7 +240,7 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // TODO: some code goes here
         // not necessary for lab1
-        for(Map.Entry<PageId,LRUCache.Node> group : lruCache.getEntrySet()) {
+        for (Map.Entry<PageId, LRUCache.Node> group : lruCache.getEntrySet()) {
             Page page = group.getValue().value;
             if (page.isDirty() != null) {
                 flushPage(group.getKey());
@@ -247,6 +289,17 @@ public class BufferPool {
     public synchronized void flushPages(TransactionId tid) throws IOException {
         // TODO: some code goes here
         // not necessary for lab1|lab2
+        for (Map.Entry<PageId, LRUCache.Node> group : lruCache.getEntrySet()) {
+            PageId pid = group.getKey();
+            Page flushPage = group.getValue().value;
+            TransactionId pageTid = flushPage.isDirty();
+            Page before = flushPage.getBeforeImage();
+            flushPage.setBeforeImage();
+            if (pageTid != null && pageTid.equals(tid)) {
+                Database.getLogFile().logWrite(tid, before, flushPage);
+                Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(flushPage);
+            }
+        }
     }
 
     /**
@@ -274,7 +327,7 @@ public class BufferPool {
         }
 
         public synchronized Page get(PageId key) {
-            if (map.containsKey(key)) {
+            if (contain(key)) {
                 remove(map.get(key));
                 moveToHead(map.get(key));
                 return map.get(key).value;
@@ -283,23 +336,24 @@ public class BufferPool {
             }
         }
 
-        public synchronized void put(PageId key, Page value){
+        public synchronized void put(PageId key, Page value) throws DbException {
             Node newNode = new Node(key, value);
             if (map.containsKey(key)) {
-                 remove(map.get(key));
-            }else {
+                remove(map.get(key));
+            } else {
                 size++;
                 if (size > capacity) {
                     Node removeNode = tail.prev;
                     //discard not dirty page
                     while (removeNode.value.isDirty() != null && removeNode != head) {
                         removeNode = removeNode.prev;
+                        if (removeNode == head || removeNode == tail) {
+                            throw new DbException("no page can be evicted");
+                        }
                     }
-                    if(removeNode != head && removeNode != tail){
-                        map.remove(removeNode.key);
-                        remove(removeNode);
-                        size--;
-                    }
+                    map.remove(removeNode.key);
+                    remove(removeNode);
+                    size--;
                 }
             }
             moveToHead(newNode);
@@ -330,22 +384,151 @@ public class BufferPool {
             remove(node);
         }
 
+        public synchronized boolean contain(PageId key) {
+            for (PageId pageId : map.keySet()) {
+                if (pageId.equals(key)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
-    private static class Node {
-        PageId key;
-        Page value;
-        Node prev;
-        Node next;
+        private static class Node {
+            PageId key;
+            Page value;
+            Node prev;
+            Node next;
 
-        public Node(PageId key, Page value) {
-            this.key = key;
-            this.value = value;
+            public Node(PageId key, Page value) {
+                this.key = key;
+                this.value = value;
+            }
+        }
+
+        public Set<Map.Entry<PageId, Node>> getEntrySet() {
+            return map.entrySet();
         }
     }
 
-    public Set<Map.Entry<PageId,Node>> getEntrySet() {
-        return map.entrySet();
+    @AllArgsConstructor
+    @Data
+    private static class PageLock {
+        private TransactionId tid;
+        private PageId pid;
+        private LockType type;
     }
-}
+
+    private static class LockManager {
+        @Getter
+        public ConcurrentHashMap<PageId, ConcurrentHashMap<TransactionId, PageLock>> lockMap;
+
+        public LockManager() {
+            lockMap = new ConcurrentHashMap<>();
+        }
+
+        /**
+         * Return true if the specified transaction has a lock on the specified page
+         */
+        public boolean holdsLock(TransactionId tid, PageId p) {
+            // TODO: some code goes here
+            // not necessary for lab1|lab2
+            if (lockMap.get(p) == null) {
+                return false;
+            }
+            return lockMap.get(p).get(tid) != null;
+        }
+
+        public synchronized boolean acquireLock(PageId pageId, TransactionId tid, LockType requestLock, int reTry) throws TransactionAbortedException, InterruptedException {
+            // 3 times reTry
+            if (reTry == 3) {
+                return false;
+            }
+            // if the page is not in the lockMap, add it
+            if (lockMap.get(pageId) == null) {
+                return putLock(tid, pageId, requestLock);
+            }
+            // if the page is in the lockMap, check
+            ConcurrentHashMap<TransactionId, PageLock> tidLocksMap = lockMap.get(pageId);
+            // the tid does not have a lock on the page
+            if (tidLocksMap.get(tid) == null) {
+                // if requestLock is X lock
+                if (requestLock == LockType.EXCLUSIVE_LOCK) {
+                    wait(100);
+                    return acquireLock(pageId, tid, requestLock, reTry + 1);
+                } else if (requestLock == LockType.SHARE_LOCK) {
+                    // if the lock size on the page greater than 0, the locks are all S lock,because x lock acquired by one transaction
+                    if (tidLocksMap.size() > 1) {
+                        // all the locks are S lock, the tid can acquire S lock
+                        return putLock(tid, pageId, requestLock);
+                    } else {
+                        Collection<PageLock> values = tidLocksMap.values();
+                        for (PageLock value : values) {
+                            if (value.getType() == LockType.EXCLUSIVE_LOCK) {
+                                wait(100);
+                                return acquireLock(pageId, tid, requestLock, reTry + 1);
+                            } else {
+                                return putLock(tid, pageId, requestLock);
+                            }
+                        }
+                    }
+                }
+            } else {
+                // the tid has a lock on the page
+                if (requestLock == LockType.SHARE_LOCK) {
+                    tidLocksMap.remove(tid);
+                    return putLock(tid, pageId, requestLock);
+                } else {
+                    // if self's lock is exclusive lock, return true
+                    if (tidLocksMap.get(tid).getType() == LockType.EXCLUSIVE_LOCK) {
+                        return true;
+                    } else {
+                        // if self's lock is share lock, determine whether the page has other locks
+                        if (tidLocksMap.size() > 1) {
+                            wait(100);
+                            return acquireLock(pageId, tid, requestLock, reTry + 1);
+                        } else {
+                            // if the page has only one lock, and the lock is self's lock, upgrade the lock
+                            tidLocksMap.remove(tid);
+                            return putLock(tid, pageId, requestLock);
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        public boolean putLock(TransactionId tid, PageId pageId, LockType requestLock) {
+            ConcurrentHashMap<TransactionId, PageLock> tidLocksMap = lockMap.get(pageId);
+            // if the page does not have a lock,
+            if (tidLocksMap == null) {
+                tidLocksMap = new ConcurrentHashMap<>();
+                lockMap.put(pageId, tidLocksMap);
+            }
+            PageLock pageLock = new PageLock(tid, pageId, requestLock);
+            tidLocksMap.put(tid, pageLock);
+            lockMap.put(pageId, tidLocksMap);
+            return true;
+        }
+
+        public void releasePagesByTid(TransactionId tid) {
+            Set<PageId> pageIds = lockMap.keySet();
+            for (PageId pageId : pageIds) {
+                releasePage(tid, pageId);
+            }
+        }
+
+
+        public synchronized void releasePage(TransactionId tid, PageId pid) {
+            if (holdsLock(tid, pid)) {
+                ConcurrentHashMap<TransactionId, PageLock> tidLocks = lockMap.get(pid);
+                tidLocks.remove(tid);
+                if (tidLocks.isEmpty()) {
+                    lockMap.remove(pid);
+                }
+                this.notifyAll();
+            }
+        }
+    }
+
 }
 

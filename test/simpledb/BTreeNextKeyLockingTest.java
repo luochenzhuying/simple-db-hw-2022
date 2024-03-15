@@ -1,6 +1,7 @@
 package simpledb;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Permissions;
 import simpledb.execution.IndexPredicate;
 import simpledb.index.*;
@@ -35,7 +36,7 @@ public class BTreeNextKeyLockingTest extends SimpleDbTestBase {
 	}
 
 	@After
-	public void tearDown() {
+	public void tearDown() throws DbException {
 		Database.getBufferPool().transactionComplete(tid);
 	}
 

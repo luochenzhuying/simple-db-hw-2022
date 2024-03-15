@@ -7,6 +7,7 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 import junit.framework.JUnit4TestAdapter;
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Utility;
 import simpledb.storage.*;
 import simpledb.systemtest.SystemTestUtil;
@@ -25,7 +26,7 @@ public class HeapFileWriteTest extends TestUtil.CreateHeapFile {
         tid = new TransactionId();
     }
 
-    @After public void tearDown() {
+    @After public void tearDown() throws DbException {
         Database.getBufferPool().transactionComplete(tid);
     }
 

@@ -3,6 +3,7 @@ package simpledb.optimizer;
 import simpledb.ParsingException;
 import simpledb.common.Catalog;
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Type;
 import simpledb.execution.*;
 import simpledb.storage.*;
@@ -504,7 +505,7 @@ public class LogicalPlan {
         return new Project(outFields, outTypes, node);
     }
 
-    public static void main(String[] argv) throws IOException {
+    public static void main(String[] argv) throws IOException, DbException {
         // construct a 3-column table schema
         Type[] types = new Type[]{Type.INT_TYPE, Type.INT_TYPE, Type.INT_TYPE};
         String[] names = new String[]{"field0", "field1", "field2"};

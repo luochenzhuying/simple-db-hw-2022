@@ -553,7 +553,9 @@ public class BTreeUtility {
                     error = e;
                 }
 
-                Database.getBufferPool().transactionComplete(tid, false);
+
+                    Database.getBufferPool().transactionComplete(tid, false);
+
             }
         }
 

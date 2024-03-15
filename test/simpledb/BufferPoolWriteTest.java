@@ -63,7 +63,7 @@ public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
         tid = new TransactionId();
     }
 
-    @After public void tearDown() {
+    @After public void tearDown() throws DbException {
         Database.getBufferPool().transactionComplete(tid);
     }
 

@@ -1,6 +1,7 @@
 package simpledb;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Utility;
 import simpledb.storage.*;
 import simpledb.systemtest.SimpleDbTestBase;
@@ -31,7 +32,7 @@ public class HeapFileReadTest extends SimpleDbTestBase {
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws DbException {
         Database.getBufferPool().transactionComplete(tid);
     }
 

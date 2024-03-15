@@ -37,7 +37,7 @@ public class TableStatsTest extends SimpleDbTestBase {
 		this.tableId = Database.getCatalog().getTableId(tableName);		
 	}
 	
-	private double[] getRandomTableScanCosts(int[] pageNums, int[] ioCosts) throws IOException {
+	private double[] getRandomTableScanCosts(int[] pageNums, int[] ioCosts) throws IOException, DbException {
 		double[] ret = new double[ioCosts.length];
 		for(int i = 0; i < ioCosts.length; ++i) {
 			HeapFile hf = SystemTestUtil.createRandomHeapFile(1, 992*pageNums[i], 32, null, tuples);
@@ -56,7 +56,7 @@ public class TableStatsTest extends SimpleDbTestBase {
 	 *   +linear in IO_COST when numPages is constant
 	 *   +quadratic when IO_COST and numPages increase linearly.
 	 */
-	@Test public void estimateScanCostTest() throws IOException {
+	@Test public void estimateScanCostTest() throws IOException, DbException {
 		Object[] ret;
 		int[] ioCosts = new int[20];
 		int[] pageNums = new int[ioCosts.length];
@@ -98,7 +98,7 @@ public class TableStatsTest extends SimpleDbTestBase {
 	/**
 	 * Verify the table-cardinality estimates based on a selectivity estimate
 	 */
-	@Test public void estimateTableCardinalityTest() throws IOException {
+	@Test public void estimateTableCardinalityTest() throws IOException, DbException {
 		TableStats s = new TableStats(this.tableId, IO_COST);
 		
 		// Try a random selectivity
@@ -115,7 +115,7 @@ public class TableStatsTest extends SimpleDbTestBase {
 	 * each possible Op because we will probably catch any bugs here in
 	 * IntHistogramTest, so we hopefully don't need all the JUnit checkboxes.
 	 */
-	@Test public void estimateSelectivityTest() throws IOException {
+	@Test public void estimateSelectivityTest() throws IOException, DbException {
 		final int maxCellVal = 32;	// Tuple values are randomized between 0 and this number
 		
 		final Field aboveMax = new IntField(maxCellVal + 10);

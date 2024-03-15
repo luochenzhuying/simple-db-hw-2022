@@ -425,7 +425,7 @@ public class Parser {
 
     public void handleTransactStatement(ZTransactStmt s)
             throws IOException,
-            simpledb.ParsingException {
+            simpledb.ParsingException, DbException {
         switch (s.getStmtType()) {
             case "COMMIT":
                 if (curtrans == null)
@@ -586,7 +586,7 @@ public class Parser {
             "group by", "max(", "min(", "avg(", "count", "rollback", "commit",
             "insert", "delete", "values", "into"};
 
-    public static void main(String[] argv) throws IOException {
+    public static void main(String[] argv) throws IOException, DbException {
 
         if (argv.length < 1 || argv.length > 4) {
             System.out.println("Invalid number of arguments.\n" + usage);
@@ -607,7 +607,7 @@ public class Parser {
 
     protected boolean interactive = true;
 
-    protected void start(String[] argv) throws IOException {
+    protected void start(String[] argv) throws IOException, DbException {
         // first add tables to database
         Database.getCatalog().loadSchema(argv[0]);
         TableStats.computeStatistics();

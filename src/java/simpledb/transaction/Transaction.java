@@ -1,6 +1,7 @@
 package simpledb.transaction;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 
 import java.io.IOException;
 
@@ -36,21 +37,21 @@ public class Transaction {
     /**
      * Finish the transaction
      */
-    public void commit() throws IOException {
+    public void commit() throws IOException, DbException {
         transactionComplete(false);
     }
 
     /**
      * Finish the transaction
      */
-    public void abort() throws IOException {
+    public void abort() throws IOException, DbException {
         transactionComplete(true);
     }
 
     /**
      * Handle the details of transaction commit / abort
      */
-    public void transactionComplete(boolean abort) throws IOException {
+    public void transactionComplete(boolean abort) throws IOException, DbException {
 
         if (started) {
             //write abort log record and rollback transaction
