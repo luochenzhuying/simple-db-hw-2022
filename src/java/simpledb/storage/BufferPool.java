@@ -4,9 +4,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import simpledb.LogUtils;
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Permissions;
+import simpledb.index.BTreePageId;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
@@ -58,8 +60,8 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // TODO: some code goes here
         this.numPages = numPages;
-        lruCache = new LRUCache(numPages);
-        lockManager = new LockManager();
+        this.lruCache = new LRUCache(numPages);
+        this.lockManager = new LockManager();
     }
 
     public static int getPageSize() {
@@ -95,6 +97,10 @@ public class BufferPool {
             throws TransactionAbortedException, DbException {
         // TODO: some code goes here
         LockType lockType;
+        int retries = 2;
+        if( pid instanceof BTreePageId){
+            retries = 2;
+            }
         if (perm == Permissions.READ_ONLY) {
             lockType = LockType.SHARE_LOCK;
         } else {
@@ -102,13 +108,13 @@ public class BufferPool {
         }
         try {
             // if fail to acquire lock, abort the transaction
-            if (!lockManager.acquireLock(pid, tid, lockType, 0)) {
+            if (!lockManager.acquireLock(pid, tid, lockType, retries)) {
                 throw new TransactionAbortedException();
             }
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        if (lruCache.get(pid) == null) {
+        if (!lruCache.contain(pid)) {
             DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page page = dbFile.readPage(pid);
             lruCache.put(pid, page);
@@ -320,8 +326,8 @@ public class BufferPool {
 
         public LRUCache(int capacity) {
             this.capacity = capacity;
-            this.size = 0;
-            this.map = new ConcurrentHashMap<>();
+            size = 0;
+            map = new ConcurrentHashMap<>();
             head.next = tail;
             tail.prev = head;
         }
@@ -338,14 +344,14 @@ public class BufferPool {
 
         public synchronized void put(PageId key, Page value) throws DbException {
             Node newNode = new Node(key, value);
-            if (map.containsKey(key)) {
+            if (contain(key)) {
                 remove(map.get(key));
             } else {
                 size++;
                 if (size > capacity) {
                     Node removeNode = tail.prev;
                     //discard not dirty page
-                    while (removeNode.value.isDirty() != null && removeNode != head) {
+                    while (removeNode.value.isDirty() != null ) {
                         removeNode = removeNode.prev;
                         if (removeNode == head || removeNode == tail) {
                             throw new DbException("no page can be evicted");
@@ -380,8 +386,13 @@ public class BufferPool {
         }
 
         public synchronized void removeByKey(PageId key) {
-            Node node = map.get(key);
-            remove(node);
+            Node node = getNodeByKey(key);
+            if (node != null) {
+                remove(node);
+                map.remove(Objects.requireNonNull(get(key)).getId());
+            }else {
+                LogUtils.writeLog(LogUtils.ERROR, "removeByKey: " + key + " is not in the cache");
+            }
         }
 
         public synchronized boolean contain(PageId key) {
@@ -391,6 +402,15 @@ public class BufferPool {
                 }
             }
             return false;
+        }
+
+        public synchronized Node getNodeByKey(PageId key) {
+            for (PageId pageId : map.keySet()) {
+                if (pageId.equals(key)) {
+                    return map.get(pageId);
+                }
+            }
+            return null;
         }
 
         private static class Node {
