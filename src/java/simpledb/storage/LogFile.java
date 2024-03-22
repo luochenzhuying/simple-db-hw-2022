@@ -474,6 +474,36 @@ public class LogFile {
             synchronized (this) {
                 preAppend();
                 // TODO: some code goes here
+                raf.seek(tidToFirstLogRecord.get(tid.getId()));
+                Set<PageId> pageIds = new HashSet<>();
+                while (true){
+                    try {
+                        int curType = raf.readInt();
+                        long curTid = raf.readLong();
+                        switch (curType) {
+                            case CHECKPOINT_RECORD:
+                                int numTransactions = raf.readInt();
+                                while (numTransactions-- > 0) {
+                                   raf.readLong();
+                                   raf.readLong();
+                                }
+                                break;
+                            case UPDATE_RECORD:
+                                Page beforeImg = readPageData(raf);
+                                Page afterImg = readPageData(raf);
+                                if (curTid == tid.getId() && !pageIds.contains(beforeImg.getId())) {
+                                    pageIds.add(beforeImg.getId());
+                                    DbFile dbFile = Database.getCatalog().getDatabaseFile(beforeImg.getId().getTableId());
+                                    dbFile.writePage(beforeImg);
+                                    Database.getBufferPool().removePage(afterImg.getId());
+                                }
+                        }
+                        raf.readLong();
+                    } catch (EOFException e) {
+                        break;
+                    }
+
+                }
             }
         }
     }
@@ -493,6 +523,31 @@ public class LogFile {
         }
     }
 
+    public synchronized long getRecoverOffset(){
+        try {
+            raf.seek(0);
+            long checkPoint = raf.readLong();
+            if (checkPoint == -1){
+                return -1L;
+            } else {
+                raf.seek(checkPoint);
+                raf.readInt();
+                raf.readLong();
+                int numTransactions = raf.readInt();
+                long recoverOffset = Long.MAX_VALUE;
+                while (numTransactions-- > 0){
+                    raf.readLong();
+                    long firstRecord = raf.readLong();
+                    if (firstRecord < recoverOffset){
+                        recoverOffset = firstRecord;
+                    }
+                }
+                return recoverOffset;
+            }
+        } catch (IOException e) {
+          throw new RuntimeException("Error reading log file");
+        }
+    }
     /**
      * Recover the database system by ensuring that the updates of
      * committed transactions are installed and that the
@@ -503,6 +558,60 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // TODO: some code goes here
+                raf = new RandomAccessFile(logFile, "rw");
+                Map<Long, List<Page>> beforeImages = new HashMap<>();
+                Map<Long, List<Page>> afterImages = new HashMap<>();
+                HashSet<Long> committed = new HashSet<>();
+                long recoverOffset = getRecoverOffset();
+                if (recoverOffset != -1L){
+                    raf.seek(recoverOffset);
+                }
+                while (true){
+                    try {
+                        int curType = raf.readInt();
+                        long curTid = raf.readLong();
+                        switch (curType) {
+                            case CHECKPOINT_RECORD:
+                                int numTransactions = raf.readInt();
+                                while (numTransactions-- > 0) {
+                                    raf.readLong();
+                                    raf.readLong();
+                                }
+                                break;
+                            case UPDATE_RECORD:
+                                Page beforeImg = readPageData(raf);
+                                Page afterImg = readPageData(raf);
+                                List<Page> undoList = beforeImages.getOrDefault(curTid, new ArrayList<>());
+                                List<Page> redoList = afterImages.getOrDefault(curTid, new ArrayList<>());
+                                undoList.add(beforeImg);
+                                redoList.add(afterImg);
+                                beforeImages.put(curTid, undoList);
+                                afterImages.put(curTid, redoList);
+                                break;
+                            case COMMIT_RECORD:
+                                committed.add(curTid);
+                        }
+                        raf.readLong();
+                    } catch (EOFException e) {
+                        break;
+                    }
+                }
+                for (long tid : beforeImages.keySet()){
+                    if (!committed.contains(tid)){
+                        List<Page> pages = beforeImages.get(tid);
+                        for (Page page : pages){
+                            Database.getCatalog().getDatabaseFile(page.getId().getTableId()).writePage(page);
+                        }
+                    }
+                }
+                for (long tid : committed){
+                    if (afterImages.containsKey(tid)){
+                        List<Page> pages = afterImages.get(tid);
+                        for (Page page : pages){
+                            Database.getCatalog().getDatabaseFile(page.getId().getTableId()).writePage(page);
+                        }
+                    }
+                }
             }
         }
     }
